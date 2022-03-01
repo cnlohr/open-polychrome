@@ -1,2 +1,5 @@
 # open-polychrome
-A stab at reverse engineering ASRock Polychrome To Enable OSC-Based Intercompatibility
+Reverse engineering ASRock Polychrome, quick demo.
+
+This is example code showing how to change the colors procedurally using C.
+
