@@ -19,28 +19,33 @@
 //  Look at RGB values find the bits that are the actual colors.
 //  Shove some bits down the pipe and see if it looks similar.
 
+/// And then you find out someone's already RE'd it.
+// https://gitlab.com/CalcProgrammer1/OpenRGB/-/blob/master/Controllers/ASRockPolychromeUSBController/ASRockPolychromeUSBController.cpp
+
 int main()
 {
 	hid_init();
 	hid_device * dev = hid_open( 0x26ce, 0x01a2, 0 );
-	
-	uint8_t data[64] = { 0 };
+	printf( "Device: %p\n", dev );
+	uint8_t data[65] = { 0 };
 	int i = 0;
 	while( 1 )
 	{
-		data[0] = 0; // size or type or something
-		data[1] = 0x10;
-		data[2] = 0;
-		data[3] = 6;
-		data[4] = 1;
-		data[5] = i;
-		data[6] = i;
-		data[7] = i;
-		data[8] = 0x80;
-		data[9] = 0xff;
-		i+=128;
-		int r = HID_API_CALL hid_write( dev, data, 64 );
-		printf( "R: %d\n", r); 
-		Sleep( 10 );
+		uint8_t * dptr = data;
+		*(dptr++) = 0; // Just hidapi being hidapi
+		*(dptr++) = 0x10;
+		*(dptr++) = 0;
+		*(dptr++) = 6; // zone (Board backside = 6, this can be changed)
+		*(dptr++) = 1; // mode
+		*(dptr++) = (i&1)?255:0;
+		*(dptr++) = (i&1)?0:255;
+		*(dptr++) = (i&1)?255:0;
+		*(dptr++) = 0x80;
+		*(dptr++) = 0xff; //Intensity
+		*(dptr++) = 0; //Allzone?
+		i++;
+		int r = HID_API_CALL hid_write( dev, data, 65 );
+		printf( "R: %d / %d\n", r, i ); 
+		Sleep( 20 );
 	}
 }
