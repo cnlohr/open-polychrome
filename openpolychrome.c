@@ -1,10 +1,13 @@
 // To compile
-//   tcc openpolychrome.c -run -lsetupapi
+//   tcc openpolychrome.c -run -lsetupapi -lws2_32
 
 #include <stdio.h>
 #include <windows.h>
 #include "hidapi.h"
 #include "hidapi.c"
+
+#define MINIOSC_IMPLEMENTATION
+#include "miniosc.h"
 
 // Technique
 //  Install Wireshark + USBMon
@@ -22,30 +25,65 @@
 /// And then you find out someone's already RE'd it.
 // https://gitlab.com/CalcProgrammer1/OpenRGB/-/blob/master/Controllers/ASRockPolychromeUSBController/ASRockPolychromeUSBController.cpp
 
+hid_device * dev;
+
+void oscCallback( const char * address, const char * type, void ** parameters )
+{
+	if( strcmp( address, "/opc/zone6" ) == 0 )
+	{
+		if( strcmp( type, ",r" ) == 0 )
+		{
+			uint32_t colorval = *((uint32_t*)parameters[0]);
+			uint8_t data[65] = { 0 };
+			uint8_t * dptr = data;
+			*(dptr++) = 0; // Just hidapi being hidapi
+			*(dptr++) = 0x10;
+			*(dptr++) = 0;
+			*(dptr++) = 6; // zone (Board backside = 6, this can be changed)
+			*(dptr++) = 1; // mode
+			*(dptr++) = (colorval>>0)&0xff;
+			*(dptr++) = (colorval>>8)&0xff;
+			*(dptr++) = (colorval>>16)&0xff;
+			*(dptr++) = 0x00;
+			*(dptr++) = 0xff; //Intensity
+			*(dptr++) = 0; //Allzone?
+			int r = hid_write( dev, data, 65 );
+			hid_read( dev, data, 64 );
+			printf( "R: %d [%08x]\n", r, colorval );
+		}
+		else
+		{
+			printf( "Unknown parmaeters: %s\n", type );
+		}
+	}
+	else
+	{
+		printf( "Unknown message: %s\n", address );
+	}
+}
+
 int main()
 {
 	hid_init();
-	hid_device * dev = hid_open( 0x26ce, 0x01a2, 0 );
+	dev = hid_open( 0x26ce, 0x01a2, 0 );
 	printf( "Device: %p\n", dev );
-	uint8_t data[65] = { 0 };
-	int i = 0;
-	while( 1 )
+	if( !dev )
 	{
-		uint8_t * dptr = data;
-		*(dptr++) = 0; // Just hidapi being hidapi
-		*(dptr++) = 0x10;
-		*(dptr++) = 0;
-		*(dptr++) = 6; // zone (Board backside = 6, this can be changed)
-		*(dptr++) = 1; // mode
-		*(dptr++) = (i&1)?255:0;
-		*(dptr++) = (i&1)?0:255;
-		*(dptr++) = (i&1)?255:0;
-		*(dptr++) = 0x80;
-		*(dptr++) = 0xff; //Intensity
-		*(dptr++) = 0; //Allzone?
-		i++;
-		int r = HID_API_CALL hid_write( dev, data, 65 );
-		printf( "R: %d / %d\n", r, i ); 
-		Sleep( 20 );
+		fprintf( stderr, "Error: No Polychrome USB Motherboard detected.\n" );
+		return -5;
 	}
+	
+	int minioscerrorcode = 0;
+	miniosc * osc = minioscInit( 9993, 0, 0, &minioscerrorcode );
+	if( !osc )
+	{
+		fprintf( stderr, "Error: could not initialize miniosc. Error code: %d\n", minioscerrorcode );
+		return -6;
+	}
+	
+	while(1)
+	{
+		minioscPoll( osc, 10000, oscCallback );
+	}
+	
 }
